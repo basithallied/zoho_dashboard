@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PlusCircle, X, Check, Sparkles } from 'lucide-react';
+import { API_BASE } from '../apiConfig';
 
 const DynamicKPICreatorModal = ({ isOpen, onClose, onKpiCreated }) => {
   const [name, setName] = useState('');
@@ -43,7 +44,7 @@ const DynamicKPICreatorModal = ({ isOpen, onClose, onKpiCreated }) => {
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/kpis', {
+      const res = await fetch(`${API_BASE}/kpis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

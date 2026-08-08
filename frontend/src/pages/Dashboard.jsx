@@ -13,6 +13,8 @@ import {
 } from 'recharts';
 import { PlusCircle, Printer } from 'lucide-react';
 
+import { API_BASE } from '../apiConfig';
+
 const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 
 const Dashboard = () => {
@@ -40,17 +42,17 @@ const Dashboard = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const kpiUrl = `http://localhost:8000/api/kpis?module=${selectedModule}`;
-      const leadsUrl = `http://localhost:8000/api/crm/leads?status=${statusFilter}`;
-      const dealsUrl = `http://localhost:8000/api/crm/deals?stage=${statusFilter}`;
-      const projectsUrl = `http://localhost:8000/api/projects?status=${statusFilter}`;
-      const invoicesUrl = `http://localhost:8000/api/books/invoices?status=${statusFilter}`;
-      const expensesUrl = `http://localhost:8000/api/books/expenses`;
-      const summaryUrl = `http://localhost:8000/api/analytics/summary`;
-      const funnelUrl = `http://localhost:8000/api/analytics/funnel`;
-      const alertsUrl = `http://localhost:8000/api/alerts`;
-      const forecastUrl = `http://localhost:8000/api/analytics/ai-forecast`;
-      const comparisonUrl = `http://localhost:8000/api/analytics/period-comparison`;
+      const kpiUrl = `${API_BASE}/kpis?module=${selectedModule}`;
+      const leadsUrl = `${API_BASE}/crm/leads?status=${statusFilter}`;
+      const dealsUrl = `${API_BASE}/crm/deals?stage=${statusFilter}`;
+      const projectsUrl = `${API_BASE}/projects?status=${statusFilter}`;
+      const invoicesUrl = `${API_BASE}/books/invoices?status=${statusFilter}`;
+      const expensesUrl = `${API_BASE}/books/expenses`;
+      const summaryUrl = `${API_BASE}/analytics/summary`;
+      const funnelUrl = `${API_BASE}/analytics/funnel`;
+      const alertsUrl = `${API_BASE}/alerts`;
+      const forecastUrl = `${API_BASE}/analytics/ai-forecast`;
+      const comparisonUrl = `${API_BASE}/analytics/period-comparison`;
 
       const [kpiRes, leadsRes, dealsRes, projRes, invRes, expRes, sumRes, funRes, altRes, forcRes, compRes] = await Promise.all([
         fetch(kpiUrl),

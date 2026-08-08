@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
+import { API_BASE } from '../apiConfig';
 
 const ChatWithData = () => {
   const [selectedModel, setSelectedModel] = useState('kimi-k1.5');
@@ -20,7 +21,7 @@ const ChatWithData = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/chat', {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMsg, model: selectedModel })

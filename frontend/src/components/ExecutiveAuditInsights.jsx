@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Trophy, DollarSign, Target, Calendar, ArrowUpRight, TrendingUp, Users, Printer } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { API_BASE } from '../apiConfig';
 
 const ExecutiveAuditInsights = () => {
   const [leaderboard, setLeaderboard] = useState([]);
@@ -12,10 +13,10 @@ const ExecutiveAuditInsights = () => {
     const fetchAuditData = async () => {
       try {
         const [leadRes, chanRes, cashRes, workRes] = await Promise.all([
-          fetch('http://localhost:8000/api/crm/leaderboard'),
-          fetch('http://localhost:8000/api/crm/channel-roi'),
-          fetch('http://localhost:8000/api/books/cashflow-timeline'),
-          fetch('http://localhost:8000/api/projects/workload')
+          fetch(`${API_BASE}/crm/leaderboard`),
+          fetch(`${API_BASE}/crm/channel-roi`),
+          fetch(`${API_BASE}/books/cashflow-timeline`),
+          fetch(`${API_BASE}/projects/workload`)
         ]);
         if (leadRes.ok) setLeaderboard(await leadRes.json());
         if (chanRes.ok) setChannels(await chanRes.json());

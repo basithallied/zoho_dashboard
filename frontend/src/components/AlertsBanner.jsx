@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, BellRing, X, PlusCircle, Trash2 } from 'lucide-react';
+import { API_BASE } from '../apiConfig';
 
 const AlertsBanner = ({ alerts, onRefreshAlerts }) => {
   const [showManager, setShowManager] = useState(false);
@@ -16,7 +17,7 @@ const AlertsBanner = ({ alerts, onRefreshAlerts }) => {
   const handleCreateAlert = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:8000/api/alerts', {
+      const res = await fetch(`${API_BASE}/alerts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -37,7 +38,7 @@ const AlertsBanner = ({ alerts, onRefreshAlerts }) => {
 
   const handleDeleteAlert = async (id) => {
     try {
-      await fetch(`http://localhost:8000/api/alerts/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/alerts/${id}`, { method: 'DELETE' });
       onRefreshAlerts();
     } catch (err) {
       console.error("Error deleting alert:", err);

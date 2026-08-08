@@ -4,6 +4,7 @@ import {
   Target, Folder, DollarSign, Sparkles, Trophy, Layers, ChevronRight, Bell, ShieldCheck
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { API_BASE } from '../apiConfig';
 
 const MobileDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -19,12 +20,12 @@ const MobileDashboard = () => {
     setLoading(true);
     try {
       const [kpiRes, sumRes, forcRes, altRes, leadRes, cashRes] = await Promise.all([
-        fetch('http://localhost:8000/api/kpis?module=all'),
-        fetch('http://localhost:8000/api/analytics/summary'),
-        fetch('http://localhost:8000/api/analytics/ai-forecast'),
-        fetch('http://localhost:8000/api/alerts'),
-        fetch('http://localhost:8000/api/crm/leaderboard'),
-        fetch('http://localhost:8000/api/books/cashflow-timeline')
+        fetch(`${API_BASE}/kpis?module=all`),
+        fetch(`${API_BASE}/analytics/summary`),
+        fetch(`${API_BASE}/analytics/ai-forecast`),
+        fetch(`${API_BASE}/alerts`),
+        fetch(`${API_BASE}/crm/leaderboard`),
+        fetch(`${API_BASE}/books/cashflow-timeline`)
       ]);
 
       if (kpiRes.ok) setKpis(await kpiRes.json());
