@@ -1,0 +1,24 @@
+# Stage 1: Build React Vite Application
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Serve with Apache HTTP Server (httpd)
+FROM httpd:2.4-alpine
+
+# Copy static build to Apache DocumentRoot
+COPY --from=builder /app/dist /usr/local/apache2/htdocs/
+
+# Enable mod_proxy, mod_proxy_http, and mod_rewrite in httpd.conf
+RUN sed -i 's/#LoadModule proxy_module/LoadModule proxy_module/' /usr/local/apache2/conf/httpd.conf && \
+    sed -i 's/#LoadModule proxy_http_module/LoadModule proxy_http_module/' /usr/local/apache2/conf/httpd.conf && \
+    sed -i 's/#LoadModule rewrite_module/LoadModule rewrite_module/' /usr/local/apache2/conf/httpd.conf
+
+# Include custom Apache virtualhost config
+COPY frontend/apache.conf /usr/local/apache2/conf/extra/zoho-vhost.conf
+RUN echo "Include /usr/local/apache2/conf/extra/zoho-vhost.conf" >> /usr/local/apache2/conf/httpd.conf
+
+EXPOSE 80 443

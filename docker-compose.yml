@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # 🐘 Production PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: zoho_postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zoho_mis}
+      POSTGRES_USER: ${POSTGRES_USER:-zoho_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-YourSecurePassword123!}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ⚡ FastAPI Python Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zoho_fastapi_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-zoho_admin}:${POSTGRES_PASSWORD:-YourSecurePassword123!}@db:5432/${POSTGRES_DB:-zoho_mis}
+      - ZOHO_MODE=${ZOHO_MODE:-mock}
+      - KIMI_API_KEY=${KIMI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  # 🛡️ Nginx Frontend Web Server
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: zoho_nginx_frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
