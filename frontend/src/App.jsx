@@ -1,144 +1,112 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { api, currentIdentity, setIdentity } from './api';
+import { NAV_ITEMS, Rail, TopBar } from './components/Shell';
+import { SourceRecordProvider } from './components/SourceRecords';
+import { ErrorBanner } from './components/ui';
 import Dashboard from './pages/Dashboard';
-import UsersPage from './pages/Users';
+import Reports from './pages/Reports';
+import Approvals from './pages/Approvals';
+import ChatWithData from './pages/ChatWithData';
+import Anomalies from './pages/Anomalies';
+import DataSources from './pages/DataSources';
+import UsersTeams from './pages/UsersTeams';
 import SettingsPage from './pages/Settings';
-import ChatWithData from './components/ChatWithData';
-import MobileDashboard from './pages/MobileDashboard';
-import { LayoutDashboard, MessageSquare, Settings, Users, LogOut, Menu, Smartphone } from 'lucide-react';
+import AuditLogs from './pages/AuditLogs';
 
-function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+const PAGE_META = {
+  dashboard: ['Dashboard', 'AI-powered MIS reporting, approvals, insights and anomaly detection.'],
+  reports: ['Reports & Schedules', 'Create, schedule and manage all your automated reports.'],
+  approvals: ['Approvals', 'Reports waiting on their reviewing team before they reach management.'],
+  chat: ['Chat with Data', 'Ask questions, get insights, and visualise your business data.'],
+  anomalies: ['Anomalies', 'Detection of unusual patterns in your business data and software usage.'],
+  sources: ['Data Sources', 'Connected systems the agent reads from. Nothing is written back.'],
+  people: ['Users & Teams', 'Who can see what, and which team reviews which report.'],
+  settings: ['Settings', 'Reporting calendar, detection rules and delivery configuration.'],
+  audit: ['Audit Logs', 'Who saw what, when, and what changed.'],
+};
+
+export default function App() {
+  const [view, setView] = useState('dashboard');
+  const [railOpen, setRailOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [counts, setCounts] = useState({ approvals: 0, anomalies: 0 });
+  const [error, setError] = useState(null);
+  const [identity, setIdentityState] = useState(currentIdentity());
+
+  const refreshShell = useCallback(async () => {
+    try {
+      const [me, people, dataSources, approvalSummary, anomalySummary] = await Promise.all([
+        api.get('/me'),
+        api.get('/users'),
+        api.get('/data-sources'),
+        api.get('/approvals/summary'),
+        api.get('/anomalies/summary'),
+      ]);
+      setUser(me);
+      setUsers(people);
+      setSources(dataSources);
+      setCounts({ approvals: approvalSummary.pending, anomalies: anomalySummary.active });
+      setError(null);
+    } catch (err) {
+      setError(`${err.message} — is the MIS Agent API running?`);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshShell();
+  }, [refreshShell, identity]);
+
+  const handleIdentityChange = (email) => {
+    setIdentity(email);
+    setIdentityState(email);
+    setView('dashboard');
+  };
+
+  const [title, subtitle] = PAGE_META[view] || PAGE_META.dashboard;
+  const pageProps = { user, onCountsChanged: refreshShell, onNavigate: setView };
 
   return (
-    <div className="app-container">
-      {/* Sidebar Navigation */}
-      <aside className={`glass sidebar ${mobileMenuOpen ? 'open' : ''}`}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ color: 'var(--primary-color)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <LayoutDashboard size={24} />
-            Zoho MIS
-          </h2>
-          <button 
-            className="mobile-only btn" 
-            style={{ padding: '0.5rem', background: 'transparent' }}
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            <Menu size={24} />
-          </button>
-        </div>
+    <SourceRecordProvider>
+      <div className="shell">
+        <Rail
+          active={view}
+          onNavigate={(key) => {
+            setView(key);
+            setRailOpen(false);
+          }}
+          counts={counts}
+          sources={sources}
+          open={railOpen}
+        />
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }} className="nav-menu">
-          <button 
-            className={`btn ${activeTab === 'dashboard' ? 'btn-primary' : ''}`}
-            style={{ justifyContent: 'flex-start', background: activeTab !== 'dashboard' ? 'transparent' : '', color: activeTab !== 'dashboard' ? 'var(--text-secondary)' : '' }}
-            onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
-          >
-            <LayoutDashboard size={20} />
-            Dashboard
-          </button>
+        <main className="main">
+          <TopBar
+            title={title}
+            subtitle={subtitle}
+            user={user}
+            users={users}
+            onIdentityChange={handleIdentityChange}
+            onToggleRail={() => setRailOpen((open) => !open)}
+          />
 
-          <button 
-            className={`btn ${activeTab === 'mobile' ? 'btn-primary' : ''}`}
-            style={{ justifyContent: 'flex-start', background: activeTab !== 'mobile' ? 'transparent' : '', color: activeTab !== 'mobile' ? 'var(--text-secondary)' : '' }}
-            onClick={() => { setActiveTab('mobile'); setMobileMenuOpen(false); }}
-          >
-            <Smartphone size={20} />
-            Mobile App View
-          </button>
-          
-          <button 
-            className={`btn ${activeTab === 'chat' ? 'btn-primary' : ''}`}
-            style={{ justifyContent: 'flex-start', background: activeTab !== 'chat' ? 'transparent' : '', color: activeTab !== 'chat' ? 'var(--text-secondary)' : '' }}
-            onClick={() => { setActiveTab('chat'); setMobileMenuOpen(false); }}
-          >
-            <MessageSquare size={20} />
-            Chat with Data
-          </button>
-
-          <button 
-            className={`btn ${activeTab === 'users' ? 'btn-primary' : ''}`}
-            style={{ justifyContent: 'flex-start', background: activeTab !== 'users' ? 'transparent' : '', color: activeTab !== 'users' ? 'var(--text-secondary)' : '' }}
-            onClick={() => { setActiveTab('users'); setMobileMenuOpen(false); }}
-          >
-            <Users size={20} />
-            Users
-          </button>
-
-          <button 
-            className={`btn ${activeTab === 'settings' ? 'btn-primary' : ''}`}
-            style={{ justifyContent: 'flex-start', background: activeTab !== 'settings' ? 'transparent' : '', color: activeTab !== 'settings' ? 'var(--text-secondary)' : '' }}
-            onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
-          >
-            <Settings size={20} />
-            Settings
-          </button>
-        </nav>
-
-        <div style={{ marginTop: 'auto' }} className="nav-menu">
-          <button 
-            className="btn"
-            style={{ justifyContent: 'flex-start', background: 'transparent', color: 'var(--danger)', width: '100%' }}
-          >
-            <LogOut size={20} />
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="main-content fade-in">
-        <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1>
-              {activeTab === 'dashboard' && 'Overview'}
-              {activeTab === 'mobile' && 'Executive Mobile Companion App'}
-              {activeTab === 'chat' && 'AI Data Assistant'}
-              {activeTab === 'users' && 'User Management'}
-              {activeTab === 'settings' && 'System Configuration'}
-            </h1>
-            <p>Welcome back, Admin</p>
+          <div className="page">
+            <ErrorBanner error={error} onRetry={refreshShell} />
+            {view === 'dashboard' && <Dashboard key={identity} {...pageProps} />}
+            {view === 'reports' && <Reports key={identity} {...pageProps} />}
+            {view === 'approvals' && <Approvals key={identity} {...pageProps} />}
+            {view === 'chat' && <ChatWithData key={identity} {...pageProps} />}
+            {view === 'anomalies' && <Anomalies key={identity} {...pageProps} />}
+            {view === 'sources' && <DataSources key={identity} {...pageProps} />}
+            {view === 'people' && <UsersTeams key={identity} {...pageProps} />}
+            {view === 'settings' && <SettingsPage key={identity} {...pageProps} />}
+            {view === 'audit' && <AuditLogs key={identity} {...pageProps} />}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-color)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-              AD
-            </div>
-          </div>
-        </header>
-
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'mobile' && <MobileDashboard />}
-        {activeTab === 'chat' && <ChatWithData />}
-        {activeTab === 'users' && <UsersPage />}
-        {activeTab === 'settings' && <SettingsPage />}
-      </main>
-      
-      <style>{`
-        @media (max-width: 768px) {
-          .nav-menu {
-            display: ${mobileMenuOpen ? 'flex' : 'none'} !important;
-            position: absolute;
-            top: 70px;
-            left: 0;
-            right: 0;
-            background: var(--surface-color);
-            backdrop-filter: blur(12px);
-            padding: 1rem;
-            border-bottom: 1px solid var(--surface-border);
-            z-index: 20;
-          }
-          .mobile-only {
-            display: block;
-          }
-        }
-        @media (min-width: 769px) {
-          .mobile-only {
-            display: none;
-          }
-        }
-      `}</style>
-    </div>
+        </main>
+      </div>
+    </SourceRecordProvider>
   );
 }
 
-export default App;
+export { NAV_ITEMS };

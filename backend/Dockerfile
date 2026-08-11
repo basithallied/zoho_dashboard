@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn uvicorn psycopg2-bin
 # Copy backend application files
 COPY . .
 
-# Expose port and run Gunicorn ASGI server
+# Expose port and run Gunicorn ASGI server.
+# Run the scheduler as its own process (python -m scheduler), not in these
+# workers — see scheduler.py.
+ENV MIS_SCHEDULER_ENABLED=0
 EXPOSE 8000
 CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8000"]

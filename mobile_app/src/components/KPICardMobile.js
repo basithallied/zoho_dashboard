@@ -1,56 +1,37 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-export const KPICardMobile = ({ title, value, unit, trend, trendValue }) => {
-  const formattedValue = typeof value === 'number' ? value.toLocaleString() : value;
-
-  return (
-    <View style={styles.card}>
+/**
+ * One traceable figure. `subtitle` carries the period and the number of source
+ * records behind the value, so the reader can see what it was computed from.
+ */
+export const KPICardMobile = ({ title, value, subtitle, change, positive }) => (
+  <View style={styles.card}>
+    <View style={styles.row}>
       <Text style={styles.title}>{title}</Text>
-      <Text style={styles.value}>
-        {unit}{formattedValue}
-      </Text>
-      <View style={styles.trendRow}>
-        <Text style={[styles.trendText, { color: trend === 'down' && !title.includes('DSO') ? '#ef4444' : '#10b981' }]}>
-          {trendValue || (trend === 'up' ? '▲ Positive' : '▼ Decreasing')}
+      {change !== null && change !== undefined && (
+        <Text style={[styles.change, { color: positive ? '#34d399' : '#f87171' }]}>
+          {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%
         </Text>
-      </View>
+      )}
     </View>
-  );
-};
+    <Text style={styles.value}>{value}</Text>
+    {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+  </View>
+);
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
+    backgroundColor: '#1c1f3d',
+    borderRadius: 14,
     padding: 14,
-    marginRight: 10,
-    width: 160,
+    marginVertical: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4
+    borderColor: 'rgba(255, 255, 255, 0.07)',
   },
-  title: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontWeight: '600'
-  },
-  value: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#f8fafc',
-    marginVertical: 6
-  },
-  trendRow: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  trendText: {
-    fontSize: 11,
-    fontWeight: '700'
-  }
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: 12, color: '#a8adc9', fontWeight: '600', flexShrink: 1 },
+  change: { fontSize: 11, fontWeight: '700' },
+  value: { fontSize: 20, fontWeight: '800', color: '#f8fafc', marginTop: 6 },
+  subtitle: { fontSize: 11, color: '#6b7186', marginTop: 3 },
 });

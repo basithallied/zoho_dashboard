@@ -1,43 +1,53 @@
 version: '3.8'
 
 services:
-  # 🐘 Production PostgreSQL Database
   db:
     image: postgres:15-alpine
-    container_name: zoho_postgres_db
+    container_name: mis_agent_db
     restart: always
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-zoho_mis}
-      POSTGRES_USER: ${POSTGRES_USER:-zoho_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-YourSecurePassword123!}
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-mis_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-mis_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # ⚡ FastAPI Python Backend
+  # The API. The scheduler is disabled here because gunicorn runs several
+  # workers and each would otherwise generate the same period.
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: zoho_fastapi_backend
+    container_name: mis_agent_api
     restart: always
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-zoho_admin}:${POSTGRES_PASSWORD:-YourSecurePassword123!}@db:5432/${POSTGRES_DB:-zoho_mis}
-      - ZOHO_MODE=${ZOHO_MODE:-mock}
-      - KIMI_API_KEY=${KIMI_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-mis_admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-mis_agent}
+      - MIS_SCHEDULER_ENABLED=0
+      - MIS_ALLOWED_ORIGINS=${MIS_ALLOWED_ORIGINS:-http://localhost}
     ports:
       - "8000:8000"
     depends_on:
       - db
 
-  # 🛡️ Nginx Frontend Web Server
+  # Single replica: report generation, review escalation and anomaly scanning.
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mis_agent_scheduler
+    restart: always
+    command: ["python", "-m", "scheduler"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-mis_admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-mis_agent}
+      - MIS_SCHEDULER_INTERVAL=${MIS_SCHEDULER_INTERVAL:-900}
+    depends_on:
+      - db
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: zoho_nginx_frontend
+    container_name: mis_agent_web
     restart: always
     ports:
       - "80:80"

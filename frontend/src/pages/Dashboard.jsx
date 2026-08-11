@@ -1,414 +1,324 @@
-import React, { useEffect, useState } from 'react';
-import KPICard from '../components/KPICard';
-import FilterBar from '../components/FilterBar';
-import SalesFunnel from '../components/SalesFunnel';
-import AlertsBanner from '../components/AlertsBanner';
-import AIPredictiveStudio from '../components/AIPredictiveStudio';
-import PeriodComparisonStudio from '../components/PeriodComparisonStudio';
-import DynamicKPICreatorModal from '../components/DynamicKPICreatorModal';
-import ExecutiveAuditInsights from '../components/ExecutiveAuditInsights';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell, Legend
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  CartesianGrid, Area, AreaChart,
 } from 'recharts';
-import { PlusCircle, Printer } from 'lucide-react';
+import {
+  AlertTriangle, ArrowRight, CheckCircle2, Database, FileText, Send, Sparkles,
+  TrendingDown, TrendingUp,
+} from 'lucide-react';
+import { api, formatDateTime, formatNumber, relativeTime, titleCase } from '../api';
+import { Card, EmptyState, ErrorBanner, Loading, SeverityBadge, StatTile, StatusBadge, Tabs } from '../components/ui';
+import { SourceList } from '../components/SourceRecords';
 
-import { API_BASE } from '../apiConfig';
+const DONUT_COLOURS = ['#4f46e5', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444'];
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+export default function Dashboard({ onCountsChanged, onNavigate }) {
+  const [data, setData] = useState(null);
+  const [trend, setTrend] = useState(null);
+  const [error, setError] = useState(null);
+  const [cadence, setCadence] = useState('all');
+  const [busy, setBusy] = useState(null);
 
-const Dashboard = () => {
-  const [selectedModule, setSelectedModule] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [timeframe, setTimeframe] = useState('30d');
-  const [refreshInterval, setRefreshInterval] = useState(30000); // Default 30s auto-fetch
-  
-  const [kpis, setKpis] = useState([]);
-  const [leads, setLeads] = useState([]);
-  const [deals, setDeals] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [funnelData, setFunnelData] = useState(null);
-  const [alerts, setAlerts] = useState([]);
-  const [forecastData, setForecastData] = useState(null);
-  const [comparisonData, setComparisonData] = useState([]);
-  const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
-
-  const [loading, setLoading] = useState(true);
-  const [useMockData, setUseMockData] = useState(true);
-
-  const fetchData = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
     try {
-      const kpiUrl = `${API_BASE}/kpis?module=${selectedModule}`;
-      const leadsUrl = `${API_BASE}/crm/leads?status=${statusFilter}`;
-      const dealsUrl = `${API_BASE}/crm/deals?stage=${statusFilter}`;
-      const projectsUrl = `${API_BASE}/projects?status=${statusFilter}`;
-      const invoicesUrl = `${API_BASE}/books/invoices?status=${statusFilter}`;
-      const expensesUrl = `${API_BASE}/books/expenses`;
-      const summaryUrl = `${API_BASE}/analytics/summary`;
-      const funnelUrl = `${API_BASE}/analytics/funnel`;
-      const alertsUrl = `${API_BASE}/alerts`;
-      const forecastUrl = `${API_BASE}/analytics/ai-forecast`;
-      const comparisonUrl = `${API_BASE}/analytics/period-comparison`;
-
-      const [kpiRes, leadsRes, dealsRes, projRes, invRes, expRes, sumRes, funRes, altRes, forcRes, compRes] = await Promise.all([
-        fetch(kpiUrl),
-        fetch(leadsUrl),
-        fetch(dealsUrl),
-        fetch(projectsUrl),
-        fetch(invoicesUrl),
-        fetch(expensesUrl),
-        fetch(summaryUrl),
-        fetch(funnelUrl),
-        fetch(alertsUrl),
-        fetch(forecastUrl),
-        fetch(comparisonUrl)
+      const [dashboard, trendData] = await Promise.all([
+        api.get('/dashboard'),
+        api.get('/dashboard/trend?metric_key=revenue_invoiced&period_name=this year'),
       ]);
-
-      if (kpiRes.ok) setKpis(await kpiRes.json());
-      if (leadsRes.ok) setLeads(await leadsRes.json());
-      if (dealsRes.ok) setDeals(await dealsRes.json());
-      if (projRes.ok) setProjects(await projRes.json());
-      if (invRes.ok) setInvoices(await invRes.json());
-      if (expRes.ok) setExpenses(await expRes.json());
-      if (sumRes.ok) setSummary(await sumRes.json());
-      if (funRes.ok) setFunnelData(await funRes.json());
-      if (altRes.ok) setAlerts(await altRes.json());
-      if (forcRes.ok) setForecastData(await forcRes.json());
-      if (compRes.ok) setComparisonData(await compRes.json());
+      setData(dashboard);
+      setTrend(trendData);
+      setError(null);
     } catch (err) {
-      console.error("Error connecting to FastAPI server:", err);
+      setError(err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const decide = async (runId, action) => {
+    setBusy(runId);
+    try {
+      if (action === 'approve') {
+        // Opening the run is what records the review; the API refuses to
+        // approve anything the reviewer has not opened.
+        await api.get(`/reports/runs/${runId}`);
+        await api.post(`/approvals/runs/${runId}/approve`);
+      } else {
+        await api.post(`/approvals/runs/${runId}/reject`, {
+          reason: 'Rejected from the dashboard queue — figures need review before release.',
+        });
+      }
+      await load();
+      onCountsChanged?.();
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setLoading(false);
+      setBusy(null);
     }
   };
 
-  useEffect(() => {
-    fetchData();
+  if (error && !data) return <ErrorBanner error={error} onRetry={load} />;
+  if (!data) return <Loading label="Loading dashboard…" />;
 
-    // Auto-fetch polling interval if enabled (> 0)
-    if (refreshInterval > 0) {
-      const timer = setInterval(() => {
-        fetchData();
-      }, refreshInterval);
-      return () => clearInterval(timer);
-    }
-  }, [selectedModule, statusFilter, timeframe, refreshInterval]);
-
-  // Aggregate deal stages for CRM Pie Chart
-  const dealStageChartData = deals.reduce((acc, deal) => {
-    const existing = acc.find(item => item.name === deal.stage);
-    if (existing) {
-      existing.value += deal.amount;
-    } else {
-      acc.push({ name: deal.stage, value: deal.amount });
-    }
-    return acc;
-  }, []);
-
-  // Aggregate expenses for Books Chart
-  const expenseCategoryChartData = expenses.reduce((acc, exp) => {
-    const existing = acc.find(item => item.name === exp.category);
-    if (existing) {
-      existing.value += exp.amount;
-    } else {
-      acc.push({ name: exp.category, value: exp.amount });
-    }
-    return acc;
-  }, []);
+  const { cards, upcoming_runs: upcoming, pending_approvals: pending, recent_anomalies: anomalies } = data;
+  const present = new Set(upcoming.map((run) => run.cadence));
+  const cadences = ['all', ...['daily', 'weekly', 'monthly', 'quarterly'].filter((key) => present.has(key))];
+  const visibleRuns = cadence === 'all' ? upcoming : upcoming.filter((run) => run.cadence === cadence);
+  const sentByModule = data.reports_sent_by_module.map((row) => ({
+    name: titleCase(row.module),
+    value: row.count,
+  }));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      
-      {/* Top Banner & Control */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Live MIS Analytics</h2>
-          <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Real-time cross-platform overview of Zoho CRM, Projects, and Books
-          </p>
-        </div>
+    <>
+      <ErrorBanner error={error} onRetry={load} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button 
-            className="btn btn-primary"
-            onClick={() => window.print()}
-            style={{ padding: '0.4rem 0.85rem', fontSize: '0.85rem' }}
+      <div className="grid grid-4">
+        <StatTile icon={FileText} tone="indigo" value={cards.reports_scheduled} label="Reports Scheduled" hint="Across all cadences" />
+        <StatTile icon={Send} tone="blue" value={cards.reports_sent_today} label="Reports Sent Today" hint="Published to recipients" />
+        <StatTile icon={CheckCircle2} tone="green" value={cards.pending_approvals} label="Pending Approvals" hint="Awaiting team review" />
+        <StatTile icon={AlertTriangle} tone="red" value={cards.anomalies_detected} label="Anomalies Detected" hint="Needs attention" />
+      </div>
+
+      <div className="split">
+        <div className="stack">
+          <Card
+            title="Reports & Schedules"
+            noBody
+            action={
+              <button className="link-button" onClick={() => onNavigate('reports')}>
+                View all <ArrowRight size={14} />
+              </button>
+            }
           >
-            <Printer size={16} /> Export Executive PDF
-          </button>
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
-            <input 
-              type="checkbox" 
-              checked={useMockData} 
-              onChange={(e) => setUseMockData(e.target.checked)} 
+            <Tabs
+              tabs={cadences.map((key) => ({ key, label: titleCase(key) }))}
+              active={cadence}
+              onChange={setCadence}
             />
-            <span style={{ fontWeight: 500 }}>Mock Data Active</span>
-          </label>
-        </div>
-      </div>
-
-      {/* Live Threshold Alerts Banner */}
-      <AlertsBanner alerts={alerts} onRefreshAlerts={fetchData} />
-
-      {/* Filter Bar Component */}
-      <FilterBar 
-        selectedModule={selectedModule}
-        setSelectedModule={setSelectedModule}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-        timeframe={timeframe}
-        setTimeframe={setTimeframe}
-        refreshInterval={refreshInterval}
-        setRefreshInterval={setRefreshInterval}
-        onRefresh={fetchData}
-      />
-
-      {/* Dynamic Module KPIs Section */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <h3 style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Key Performance Indicators
-          </h3>
-          <button 
-            className="btn btn-primary"
-            style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
-            onClick={() => setIsKpiModalOpen(true)}
-          >
-            <PlusCircle size={16} /> Add Custom KPI
-          </button>
-        </div>
-
-        <div className="grid grid-cols-4">
-          {loading ? (
-            [1,2,3,4].map(i => <div key={i} className="glass glass-card" style={{ height: '120px', animation: 'pulse 1.5s infinite' }}></div>)
-          ) : (
-            kpis.map((kpi, index) => (
-              <KPICard 
-                key={kpi.id} 
-                title={kpi.name} 
-                value={kpi.value} 
-                unit={kpi.unit} 
-                trend={kpi.trend} 
-                delay={index * 100} 
-              />
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Dynamic KPI Creator Modal */}
-      <DynamicKPICreatorModal 
-        isOpen={isKpiModalOpen} 
-        onClose={() => setIsKpiModalOpen(false)} 
-        onKpiCreated={fetchData} 
-      />
-
-      {/* AI Predictive Forecasting & Anomaly Engine */}
-      <AIPredictiveStudio forecastData={forecastData} />
-
-      {/* Sales & Lead Conversion Funnel */}
-      <SalesFunnel funnelData={funnelData} />
-
-      {/* Executive Business Analyst Insights: Leaderboard, Acquisition ROI & Cashflow */}
-      <ExecutiveAuditInsights />
-
-      {/* Period-over-Period (YoY / QoQ) Comparison Studio */}
-      <PeriodComparisonStudio comparisonData={comparisonData} />
-
-      {/* Comparative Graphs Section */}
-      <div className="grid grid-cols-2" style={{ gap: '1.5rem' }}>
-        
-        {/* Chart 1: CRM Deals vs Project Budgets */}
-        <div className="glass glass-card slide-up" style={{ animationDelay: '300ms', height: '380px', display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
-            {selectedModule === 'books' ? 'Expenses by Category' : 'Zoho CRM Deal Stage Distribution (SAR)'}
-          </h3>
-          <div style={{ flex: 1, width: '100%', minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              {selectedModule === 'books' ? (
-                <BarChart data={expenseCategoryChartData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--text-secondary)', fontSize: 11}} interval={0} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-secondary)'}} />
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--surface-color)', borderRadius: '12px', backdropFilter: 'blur(12px)' }} />
-                  <Bar dataKey="value" fill="var(--secondary-color)" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              ) : (
-                <PieChart>
-                  <Pie
-                    data={dealStageChartData.length > 0 ? dealStageChartData : [{name: 'No Deals', value: 1}]}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={65}
-                    outerRadius={105}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {dealStageChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--surface-color)', borderRadius: '12px', backdropFilter: 'blur(12px)' }} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                </PieChart>
-              )}
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Chart 2: Projects Budget vs Spent */}
-        <div className="glass glass-card slide-up" style={{ animationDelay: '400ms', height: '380px', display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
-            Zoho Projects: Budget vs Spent (SAR)
-          </h3>
-          <div style={{ flex: 1, width: '100%', minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={projects.slice(0, 6)} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--surface-border)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--text-secondary)', fontSize: 11}} interval={0} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-secondary)'}} />
-                <Tooltip contentStyle={{ backgroundColor: 'var(--surface-color)', borderRadius: '12px', backdropFilter: 'blur(12px)' }} />
-                <Legend verticalAlign="top" height={36} />
-                <Bar dataKey="budget" name="Budget" fill="var(--primary-color)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="spent" name="Spent" fill="var(--danger)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Filtered Multi-Module Data Tables */}
-      <div className="glass glass-card slide-up" style={{ animationDelay: '500ms', padding: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 style={{ margin: 0, color: 'var(--text-secondary)' }}>
-            {selectedModule === 'books' ? '💰 Zoho Books: Invoices' : selectedModule === 'projects' ? '📁 Zoho Projects: Active List' : '🎯 Zoho CRM: Recent Leads & Deals'}
-          </h3>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            Showing items matching status: <strong>{statusFilter}</strong>
-          </span>
-        </div>
-
-        <div style={{ overflowX: 'auto' }}>
-          {selectedModule === 'books' ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--surface-border)', color: 'var(--text-secondary)' }}>
-                  <th style={{ padding: '0.75rem 0' }}>Invoice #</th>
-                  <th style={{ padding: '0.75rem 0' }}>Customer</th>
-                  <th style={{ padding: '0.75rem 0' }}>Status</th>
-                  <th style={{ padding: '0.75rem 0' }}>Total Amount</th>
-                  <th style={{ padding: '0.75rem 0' }}>Balance Due</th>
-                  <th style={{ padding: '0.75rem 0' }}>Due Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                    <td style={{ padding: '0.85rem 0', fontWeight: '600' }}>{inv.invoice_number}</td>
-                    <td style={{ padding: '0.85rem 0' }}>{inv.customer_name}</td>
-                    <td style={{ padding: '0.85rem 0' }}>
-                      <span style={{ 
-                        padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 500,
-                        backgroundColor: inv.status === 'Paid' ? 'rgba(16, 185, 129, 0.15)' : inv.status === 'Overdue' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                        color: inv.status === 'Paid' ? 'var(--success)' : inv.status === 'Overdue' ? 'var(--danger)' : 'var(--warning)'
-                      }}>
-                        {inv.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.85rem 0', fontWeight: 600 }}>SAR {inv.total_amount.toLocaleString()}</td>
-                    <td style={{ padding: '0.85rem 0', color: inv.balance_due > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>
-                      SAR {inv.balance_due.toLocaleString()}
-                    </td>
-                    <td style={{ padding: '0.85rem 0', color: 'var(--text-secondary)' }}>
-                      {new Date(inv.due_date).toLocaleDateString()}
-                    </td>
+            <div className="scroll-x">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Report name</th>
+                    <th>Cadence</th>
+                    <th>Next run</th>
+                    <th>Recipients</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : selectedModule === 'projects' ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--surface-border)', color: 'var(--text-secondary)' }}>
-                  <th style={{ padding: '0.75rem 0' }}>Project Name</th>
-                  <th style={{ padding: '0.75rem 0' }}>Status</th>
-                  <th style={{ padding: '0.75rem 0' }}>Completion</th>
-                  <th style={{ padding: '0.75rem 0' }}>Budget</th>
-                  <th style={{ padding: '0.75rem 0' }}>Spent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {projects.map((proj) => (
-                  <tr key={proj.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                    <td style={{ padding: '0.85rem 0', fontWeight: '600' }}>{proj.name}</td>
-                    <td style={{ padding: '0.85rem 0' }}>
-                      <span style={{ 
-                        padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 500,
-                        backgroundColor: proj.status === 'Completed' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                        color: proj.status === 'Completed' ? 'var(--success)' : 'var(--primary-color)'
-                      }}>
-                        {proj.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.85rem 0' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ flex: 1, height: '8px', borderRadius: '4px', backgroundColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-                          <div style={{ width: `${proj.completion_percentage}%`, height: '100%', backgroundColor: 'var(--primary-color)' }}></div>
-                        </div>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{proj.completion_percentage}%</span>
+                </thead>
+                <tbody>
+                  {visibleRuns.map((run) => (
+                    <tr key={run.id}>
+                      <td>
+                        <div className="primary-cell">{run.name}</div>
+                        <div className="muted-cell">Team: {run.team || 'Unassigned'}</div>
+                      </td>
+                      <td>
+                        <span className="badge badge-grey">{titleCase(run.cadence)}</span>
+                      </td>
+                      <td className="nowrap">{formatDateTime(run.next_run_at)}</td>
+                      <td>{run.recipients}</td>
+                      <td>
+                        <StatusBadge status={run.status} />
+                      </td>
+                    </tr>
+                  ))}
+                  {!visibleRuns.length && (
+                    <tr>
+                      <td colSpan={5}>
+                        <EmptyState message="No scheduled reports for this cadence." />
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <div className="grid grid-2">
+            <Card title="Reports Sent Overview" subtitle="Published today, by module">
+              {sentByModule.length ? (
+                <div className="row" style={{ gap: 18 }}>
+                  <div style={{ width: 160, height: 160 }}>
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie data={sentByModule} dataKey="value" innerRadius={48} outerRadius={72} paddingAngle={3}>
+                          {sentByModule.map((entry, index) => (
+                            <Cell key={entry.name} fill={DONUT_COLOURS[index % DONUT_COLOURS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="legend" style={{ flex: 1 }}>
+                    {sentByModule.map((entry, index) => (
+                      <div className="legend-row" key={entry.name}>
+                        <span className="swatch" style={{ background: DONUT_COLOURS[index % DONUT_COLOURS.length] }} />
+                        <span className="name">{entry.name}</span>
+                        <span className="value">{entry.value}</span>
                       </div>
-                    </td>
-                    <td style={{ padding: '0.85rem 0' }}>SAR {proj.budget.toLocaleString()}</td>
-                    <td style={{ padding: '0.85rem 0', color: proj.spent > proj.budget ? 'var(--danger)' : 'var(--text-primary)' }}>
-                      SAR {proj.spent.toLocaleString()}
-                    </td>
-                  </tr>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <EmptyState message="Nothing published yet today." />
+              )}
+            </Card>
+
+            <Card
+              title="Anomalies Detected"
+              action={
+                <button className="link-button" onClick={() => onNavigate('anomalies')}>
+                  View all <ArrowRight size={14} />
+                </button>
+              }
+            >
+              <div className="stack" style={{ gap: 12 }}>
+                {anomalies.map((anomaly) => (
+                  <div key={anomaly.id} className="row" style={{ alignItems: 'flex-start', gap: 10 }}>
+                    <span
+                      className="tile-icon"
+                      style={{ width: 30, height: 30, background: 'var(--danger-soft)', color: 'var(--danger)' }}
+                    >
+                      <AlertTriangle size={14} />
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="row" style={{ gap: 8 }}>
+                        <span className="strong small">{anomaly.title}</span>
+                        <SeverityBadge severity={anomaly.severity} />
+                      </div>
+                      <div className="small muted" style={{ marginTop: 2 }}>
+                        {anomaly.entity_label} · {relativeTime(anomaly.detected_at)}
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--surface-border)', color: 'var(--text-secondary)' }}>
-                  <th style={{ padding: '0.75rem 0' }}>Company</th>
-                  <th style={{ padding: '0.75rem 0' }}>Sales Rep</th>
-                  <th style={{ padding: '0.75rem 0' }}>Status</th>
-                  <th style={{ padding: '0.75rem 0' }}>Source</th>
-                  <th style={{ padding: '0.75rem 0' }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => (
-                  <tr key={lead.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                    <td style={{ padding: '0.85rem 0', fontWeight: '600' }}>{lead.company}</td>
-                    <td style={{ padding: '0.85rem 0' }}>{lead.sales_rep}</td>
-                    <td style={{ padding: '0.85rem 0' }}>
-                      <span style={{ 
-                        padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 500,
-                        backgroundColor: lead.status === 'Qualified' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                        color: lead.status === 'Qualified' ? 'var(--success)' : 'var(--primary-color)'
-                      }}>
-                        {lead.status}
+                {!anomalies.length && <EmptyState message="No open anomalies." icon={CheckCircle2} />}
+              </div>
+            </Card>
+          </div>
+
+          <Card title="Revenue Invoiced" subtitle={`Source-backed trend · ${trend?.period || ''}`}>
+            <div style={{ height: 210 }}>
+              <ResponsiveContainer>
+                <AreaChart data={trend?.points || []} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="revenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={70}
+                    tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`} />
+                  <Tooltip formatter={(value) => `SAR ${Number(value).toLocaleString()}`} />
+                  <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2} fill="url(#revenue)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        <div className="stack">
+          <Card
+            title="Pending Approvals"
+            subtitle="Only approved reports reach management"
+            action={
+              <button className="link-button" onClick={() => onNavigate('approvals')}>
+                View all
+              </button>
+            }
+          >
+            <div className="stack" style={{ gap: 14 }}>
+              {pending.map((item) => (
+                <div key={item.approval_id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <span className="strong small">{item.report}</span>
+                    {item.escalated && <span className="badge badge-red">Escalated</span>}
+                  </div>
+                  <div className="small muted" style={{ margin: '3px 0 9px' }}>
+                    {item.period} · {item.team} · requested {relativeTime(item.requested_at)}
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button
+                      className="btn btn-sm btn-success"
+                      disabled={busy === item.run_id}
+                      onClick={() => decide(item.run_id, 'approve')}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      disabled={busy === item.run_id}
+                      onClick={() => decide(item.run_id, 'reject')}
+                    >
+                      Reject
+                    </button>
+                    {!item.opened && <span className="small faint">Not opened yet</span>}
+                  </div>
+                </div>
+              ))}
+              {!pending.length && <EmptyState message="Nothing waiting on a decision." icon={CheckCircle2} />}
+            </div>
+          </Card>
+
+          <Card title="Key Figures" subtitle="Every number opens its source records">
+            <div className="stack" style={{ gap: 14 }}>
+              {data.headline_metrics.map((metric) => (
+                <div key={metric.key}>
+                  <div className="row">
+                    <span className="small muted">{metric.label}</span>
+                    <span className="spacer" />
+                    {metric.change_pct !== null && metric.change_pct !== undefined && (
+                      <span className={`badge badge-${metric.change_pct >= 0 === metric.higher_is_better ? 'green' : 'red'}`}>
+                        {metric.change_pct >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {Math.abs(metric.change_pct).toFixed(1)}%
                       </span>
-                    </td>
-                    <td style={{ padding: '0.85rem 0', color: 'var(--text-secondary)' }}>{lead.lead_source}</td>
-                    <td style={{ padding: '0.85rem 0', fontWeight: '600' }}>SAR {lead.amount.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                    )}
+                  </div>
+                  <div className="strong" style={{ fontSize: 19, letterSpacing: '-0.02em' }}>{metric.formatted}</div>
+                  <div className="small faint" style={{ margin: '3px 0 6px' }}>
+                    {metric.period} · {formatNumber(metric.record_count)} source records
+                  </div>
+                  <SourceList refs={metric.source_refs} limit={3} />
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card title="Data Source Connectivity" action={<Database size={15} className="faint" />}>
+            <div className="stack" style={{ gap: 11 }}>
+              {data.data_sources.map((source) => (
+                <div className="row" key={source.id}>
+                  <div>
+                    <div className="small strong">
+                      {source.name} <span className="faint">({source.vendor})</span>
+                    </div>
+                    <div className="small faint">Last sync {relativeTime(source.last_sync_at)}</div>
+                  </div>
+                  <span className="spacer" />
+                  <StatusBadge status={source.status} />
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card title="Ask the agent" action={<Sparkles size={15} style={{ color: 'var(--primary)' }} />}>
+            <p className="small muted" style={{ marginBottom: 10 }}>
+              Ask a question in plain language and get the answer with charts and the records behind it.
+            </p>
+            <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => onNavigate('chat')}>
+              Open Chat with Data
+            </button>
+          </Card>
         </div>
       </div>
-
-    </div>
+    </>
   );
-};
-
-export default Dashboard;
+}
