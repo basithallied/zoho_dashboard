@@ -26,13 +26,18 @@ uvicorn main:app --reload --port 8000
 First start seeds a demonstration dataset (deterministic) and runs an initial
 anomaly scan. API docs at <http://localhost:8000/docs>.
 
-**Frontend** (Node 20+):
+**Frontend** (Node 20+), in a second terminal:
 
 ```bash
 cd frontend
 npm install
 npm run dev          # http://localhost:5173
 ```
+
+The API must be running before the front end is useful — there is no mock-data
+fallback, so every screen shows a connection banner without it. If port 5173 is
+taken Vite moves to the next free port; that is fine, the API accepts any
+localhost port unless `MIS_ALLOWED_ORIGINS` pins the list.
 
 **Everything, in containers:**
 
@@ -48,7 +53,7 @@ docker compose up --build
 | `DATABASE_URL` | `sqlite:///./sql_app.db` | Postgres URL in deployment |
 | `MIS_SCHEDULER_ENABLED` | `1` (`0` in Docker) | Run the scheduler inside the API process |
 | `MIS_SCHEDULER_INTERVAL` | `900` | Seconds between scheduler cycles |
-| `MIS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | CORS allow-list |
+| `MIS_ALLOWED_ORIGINS` | unset — any `localhost` / `127.0.0.1` port | CORS allow-list. Set it in deployment to pin exact origins |
 | `VITE_API_URL` | `/api` in production builds | API base for the front end |
 
 Run the scheduler as its own process wherever the API has more than one worker:

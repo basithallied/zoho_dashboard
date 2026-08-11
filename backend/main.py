@@ -22,11 +22,17 @@ from services import anomaly_engine, report_engine
 
 SCHEDULER_INTERVAL_SECONDS = int(os.getenv("MIS_SCHEDULER_INTERVAL", "900"))
 SCHEDULER_ENABLED = os.getenv("MIS_SCHEDULER_ENABLED", "1") != "0"
+
+# Deployments pin the exact origins. With none configured the API assumes local
+# development and accepts any localhost port, because Vite silently moves to the
+# next free port when 5173 is taken — a pinned list turns that into a wall of
+# failed requests that looks like the API is down.
 ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv("MIS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+    for origin in os.getenv("MIS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
+LOCALHOST_ORIGIN_PATTERN = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -59,6 +65,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=None if ALLOWED_ORIGINS else LOCALHOST_ORIGIN_PATTERN,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
